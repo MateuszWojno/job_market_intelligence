@@ -12,9 +12,9 @@ def load_urls(
 ):
     if not urls_path.exists():
         raise FileNotFoundError(
-            f"Nie znaleziono pliku URL-i:\n"
+            f"URL file not found:\n"
             f"{urls_path}\n\n"
-            f"Najpierw uruchom collect_job_urls()."
+            f"Run collect_job_urls() first."
         )
 
     df = pd.read_csv(
@@ -23,8 +23,8 @@ def load_urls(
 
     if "url" not in df.columns:
         raise ValueError(
-            "Plik CSV musi zawierać "
-            "kolumnę 'url'."
+            "The CSV file must contain "
+            "a 'url' column."
         )
 
     df = df.dropna(

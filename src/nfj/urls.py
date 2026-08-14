@@ -18,10 +18,7 @@ def collect_job_urls(
     delay=DEFAULT_DELAY,
     headless=False,
 ):
-    """
-    Pobiera unikalne URL-e ofert z kategorii No Fluff Jobs
-    i zapisuje je do CSV.
-    """
+
 
     if categories is None:
         categories = CATEGORIES
@@ -37,7 +34,7 @@ def collect_job_urls(
         for category in categories:
             print()
             print("=" * 70)
-            print(f"KATEGORIA: {category}")
+            print(f"Category: {category}")
             print("=" * 70)
 
             category_urls = set()
@@ -53,7 +50,7 @@ def collect_job_urls(
                 )
 
                 print()
-                print(f"Strona {page}:")
+                print(f"Page {page}:")
                 print(url)
 
                 try:
@@ -98,32 +95,32 @@ def collect_job_urls(
                     )
 
                     print(
-                        f"URL-i na stronie: "
+                        f"URL-i on page: "
                         f"{len(page_urls)}"
                     )
                     print(
-                        f"Nowych w kategorii: "
+                        f"New in category: "
                         f"{len(new_category_urls)}"
                     )
                     print(
-                        f"Unikalnych w kategorii: "
+                        "Unique in category: "
                         f"{len(category_urls)}"
                     )
                     print(
-                        f"Łącznie globalnie: "
+                        f"Total globally: "
                         f"{len(all_urls)}"
                     )
 
                     if not new_category_urls:
                         print(
-                            "Brak nowych ofert w kategorii - "
-                            "zatrzymuję kategorię."
+                            "No new offers in category - "
+                            "stopping category."
                         )
                         break
 
                 except Exception as error:
                     print(
-                        f"Błąd strony {page}: {error}"
+                        f"Page {page} error: {error}"
                     )
                     break
 
@@ -164,17 +161,17 @@ def collect_job_urls(
 
     print()
     print("=" * 70)
-    print("ZBIERANIE URL-I ZAKOŃCZONE")
+    print("URL COLLECTION COMPLETED")
     print("=" * 70)
     print(
-        f"Łącznie unikalnych URL-i: "
+        f"Total unique URLs: "
         f"{len(df_urls)}"
     )
     print()
-    print("Statystyki:")
+    print("Statistics:")
     print(df_stats)
     print()
-    print("Zapisano URL-e:")
+    print("Saved URLs:")
     print(output_path)
 
     return df_urls, df_stats

@@ -110,8 +110,6 @@ def scrape_job(
         )
     )
 
-    # Szukamy w całej głównej ofercie, nie tylko
-    # w sekcji "Szczegóły oferty".
     contract_type = extract_contract_type(
         main_text
     )
@@ -193,7 +191,7 @@ def scrape_jobs(
         urls = urls[:max_jobs]
 
     print(
-        f"URL-i do sprawdzenia: "
+        f"URLs to check: "
         f"{len(urls)}"
     )
 
@@ -204,7 +202,7 @@ def scrape_jobs(
     )
 
     print(
-        f"Już pobranych: "
+        f"Already downloaded: "
         f"{len(scraped_urls)}"
     )
 
@@ -262,7 +260,7 @@ def scrape_jobs(
 
             except Exception as error:
                 print(
-                    "BŁĄD:",
+                    "ERROR:",
                     error,
                 )
 
@@ -294,7 +292,7 @@ def scrape_jobs(
                 print()
                 print("CHECKPOINT")
                 print(
-                    f"Zapisano: "
+                    f"Saved: "
                     f"{len(df_checkpoint)}"
                 )
 
@@ -313,18 +311,18 @@ def scrape_jobs(
 
     print()
     print("=" * 70)
-    print("SCRAPING ZAKOŃCZONY")
+    print("SCRAPING COMPLETED")
     print("=" * 70)
     print(
-        f"Łącznie ofert: "
+        f"Combining offers: "
         f"{len(df_final)}"
     )
     print(
-        f"Nowo pobranych: "
+        f"Newly downloaded: "
         f"{processed}"
     )
     print(
-        f"Błędów: "
+        f"Errors: "
         f"{len(errors)}"
     )
     print()
