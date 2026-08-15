@@ -40,6 +40,54 @@ from .utils import (
 )
 
 
+class InvalidJobPageError(RuntimeError):
+    """Raised when NFJ returns an error/challenge page instead of a job offer."""
+
+
+INVALID_PAGE_MARKERS = (
+    "ta strona nie działa",
+    "jeśli problem nie ustąpi",
+    "this site can't be reached",
+    "this site can’t be reached",
+    "this page isn't working",
+    "err_connection",
+    "err_name_not_resolved",
+    "err_timed_out",
+    "err_http2_protocol_error",
+    "502 bad gateway",
+    "503 service unavailable",
+    "504 gateway time-out",
+    "access denied",
+    "verify you are human",
+    "just a moment",
+)
+
+
+def validate_job_page(
+    title,
+    body_text,
+):
+    page_text = " ".join(
+        value
+        for value in (
+            title,
+            body_text,
+        )
+        if value
+    ).casefold()
+
+    for marker in INVALID_PAGE_MARKERS:
+        if marker in page_text:
+            raise InvalidJobPageError(
+                f"Invalid NFJ page detected: {marker}"
+            )
+
+    if not body_text.strip():
+        raise InvalidJobPageError(
+            "NFJ returned an empty page."
+        )
+
+
 # ============================================================
 # SCRAPE ONE JOB
 # ============================================================
@@ -70,6 +118,11 @@ def scrape_job(
             "h1",
             "[data-testid='job-title']",
         ],
+    )
+
+    validate_job_page(
+        title=title,
+        body_text=body_text,
     )
 
     category = extract_category(
@@ -184,6 +237,7 @@ def scrape_jobs(
     delay=DEFAULT_DELAY,
     checkpoint_every=CHECKPOINT_EVERY,
     headless=False,
+    max_consecutive_page_errors=5,
 ):
     urls = load_urls(
         urls_path
@@ -204,7 +258,10 @@ def scrape_jobs(
     )
 
     print(
+
         f"Już pobranych: "
+        f"Already scraped: "
+        (Modified scraper.py)
         f"{len(scraped_urls)}"
     )
 
@@ -214,6 +271,7 @@ def scrape_jobs(
 
     errors = []
     processed = 0
+    consecutive_page_errors = 0
 
     try:
         for index, url in enumerate(
@@ -246,6 +304,7 @@ def scrape_jobs(
                 )
 
                 processed += 1
+                consecutive_page_errors = 0
 
                 print(
                     "OK:",
@@ -260,7 +319,39 @@ def scrape_jobs(
                     job.get("category"),
                 )
 
+            except InvalidJobPageError as error:
+                consecutive_page_errors += 1
+
+                print(
+                    "PAGE ERROR:",
+                    error,
+                )
+
+                errors.append(
+                    {
+                        "url": url,
+                        "error": str(error),
+                        "scraped_at":
+                            datetime.now().strftime(
+                                "%Y-%m-%d %H:%M:%S"
+                            ),
+                    }
+                )
+
+                if (
+                    consecutive_page_errors
+                    >= max_consecutive_page_errors
+                ):
+                    print()
+                    print(
+                        "Too many invalid NFJ pages in a row. "
+                        "Stopping the scraper to protect data quality."
+                    )
+                    break
+
             except Exception as error:
+                consecutive_page_errors = 0
+
                 print(
                     "BŁĄD:",
                     error,
@@ -294,7 +385,9 @@ def scrape_jobs(
                 print()
                 print("CHECKPOINT")
                 print(
-                    f"Zapisano: "
+
+                    f"Saved jobs: "
+                (Modified scraper.py)
                     f"{len(df_checkpoint)}"
                 )
 
@@ -316,15 +409,17 @@ def scrape_jobs(
     print("SCRAPING ZAKOŃCZONY")
     print("=" * 70)
     print(
-        f"Łącznie ofert: "
+
+        f"Total jobs: "
         f"{len(df_final)}"
     )
     print(
-        f"Nowo pobranych: "
+        f"Newly scraped: "
         f"{processed}"
     )
     print(
-        f"Błędów: "
+        f"Errors in this run: "
+          (Modified scraper.py)
         f"{len(errors)}"
     )
     print()
