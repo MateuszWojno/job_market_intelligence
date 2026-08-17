@@ -38,16 +38,107 @@ def extract_offer_details(body_text):
 # ============================================================
 
 def parse_salary(text):
+
     if not text:
-        return None, None, None
+        return None, None, None, None
 
     text = text.replace("\xa0", " ")
 
     pattern = (
-        r"(?<!\d)"
-        r"(\d{1,3}(?:[ .]\d{3})*|\d+)"
+        r"(\d{1,3}(?:\s\d{3})*|\d+)"
         r"\s*[–-]\s*"
-        r"(\d{1,3}(?:[ .]\d{3})*|\d+)"
+        r"(\d{1,3}(?:\s\d{3})*|\d+)"
+        r"\s*"
+        r"(PLN|EUR|USD)"
+    )
+
+    match = re.search(
+        pattern,
+        text,
+        re.IGNORECASE
+    )
+
+    if not match:
+        return None, None, None, None
+
+    try:
+        salary_min = int(
+            match.group(1).replace(" ", "")
+        )
+
+        salary_max = int(
+            match.group(2).replace(" ", "")
+        )
+
+    except ValueError:
+        return None, None, None, None
+
+    currency = match.group(3).upper()
+
+
+    salary_context = text[
+        match.end():match.end() + 120
+    ].lower()
+
+    salary_period = None
+
+    if re.search(
+        r"godzin|hour|hourly",
+        salary_context
+    ):
+        salary_period = "hour"
+
+    elif re.search(
+        r"dzień|dzien|daily|per day",
+        salary_context
+    ):
+        salary_period = "day"
+
+    elif re.search(
+        r"miesię|miesie|month|monthly",
+        salary_context
+    ):
+        salary_period = "month"
+
+    return (
+        salary_min,
+        salary_max,
+        currency,
+        salary_period,
+    )
+
+
+def parse_salary_options(text):
+
+    if not text:
+        return []
+
+    text = text.replace("\xa0", " ")
+
+    end_markers = [
+        "Szczegóły wynagrodzenia",
+        "Aplikuj",
+        "Zapisz ofertę",
+        "Analiza CV",
+        "Oceń tę ofertę",
+        "ZOBACZ PODOBNE OFERTY",
+    ]
+
+    end_positions = [
+        text.lower().find(marker.lower())
+        for marker in end_markers
+        if text.lower().find(marker.lower()) != -1
+    ]
+
+    if end_positions:
+        salary_section = text[:min(end_positions)]
+    else:
+        salary_section = text
+
+    pattern = (
+        r"(\d{1,3}(?:\s\d{3})*|\d+)"
+        r"\s*[–-]\s*"
+        r"(\d{1,3}(?:\s\d{3})*|\d+)"
         r"\s*"
         r"(PLN|EUR|USD)"
     )
@@ -55,50 +146,98 @@ def parse_salary(text):
     matches = list(
         re.finditer(
             pattern,
-            text,
-            re.IGNORECASE,
+            salary_section,
+            re.IGNORECASE
         )
     )
 
-    if not matches:
-        return None, None, None
+    salary_options = []
 
-    for match in reversed(matches):
-        try:
-            salary_min = int(
-                re.sub(
-                    r"[ .]",
-                    "",
-                    match.group(1),
-                )
+    for i, match in enumerate(matches):
+
+        if i + 1 < len(matches):
+            end = matches[i + 1].start()
+        else:
+            end = min(
+                len(salary_section),
+                match.end() + 100
             )
 
-            salary_max = int(
-                re.sub(
-                    r"[ .]",
-                    "",
-                    match.group(2),
-                )
-            )
+        context = salary_section[
+            match.start():end
+        ]
 
-        except ValueError:
-            continue
-
-        if salary_min > salary_max:
-            continue
-
-        currency = (
-            match.group(3)
-            .upper()
+        salary_min = int(
+            match.group(1).replace(" ", "")
         )
 
-        return (
-            salary_min,
-            salary_max,
-            currency,
+        salary_max = int(
+            match.group(2).replace(" ", "")
         )
 
-    return None, None, None
+        currency = match.group(3).upper()
+
+        # Contract type
+        if re.search(
+            r"\bB2B\b",
+            context,
+            re.IGNORECASE
+        ):
+            contract = "B2B"
+
+        elif re.search(
+            r"\bUoP\b",
+            context,
+            re.IGNORECASE
+        ):
+            contract = "UoP"
+
+        elif re.search(
+            r"\bUZ\b",
+            context,
+            re.IGNORECASE
+        ):
+            contract = "UZ"
+
+        else:
+            contract = None
+
+        # Salary period
+        if re.search(
+            r"miesięcz|miesiecz|month",
+            context,
+            re.IGNORECASE
+        ):
+            period = "month"
+
+        elif re.search(
+            r"godzin|hour",
+            context,
+            re.IGNORECASE
+        ):
+            period = "hour"
+
+        elif re.search(
+            r"dzien|dzień|daily|per day",
+            context,
+            re.IGNORECASE
+        ):
+            period = "day"
+
+        else:
+            period = None
+
+        salary_options.append(
+            {
+                "salary_min": salary_min,
+                "salary_max": salary_max,
+                "currency": currency,
+                "contract": contract,
+                "period": period,
+            }
+        )
+
+    return salary_options
 
 
 # ============================================================
