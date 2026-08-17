@@ -157,11 +157,12 @@ def scrape_job(
         body_text,
     )
 
-    salary_min, salary_max, salary_currency = (
-        parse_salary(
-            main_text
-        )
-    )
+    (
+        salary_min,
+        salary_max,
+        salary_currency,
+        salary_period,
+    ) = parse_salary(body_text)
 
     # Szukamy w całej głównej ofercie, nie tylko
     # w sekcji "Szczegóły oferty".
@@ -213,6 +214,7 @@ def scrape_job(
         "salary_min": salary_min,
         "salary_max": salary_max,
         "salary_currency": salary_currency,
+        "salary_period": salary_period,
         "contract_type": contract_type,
         "required_skills": required_skills,
         "nice_to_have": nice_to_have,
