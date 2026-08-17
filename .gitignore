@@ -186,6 +186,8 @@ cython_debug/
 # Raw data
 data/raw/*.csv
 
+data/processed/*
+
 # Jupyter
 .ipynb_checkpoints/
 
