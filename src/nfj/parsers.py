@@ -423,9 +423,19 @@ def extract_company_info(
             "devops",
             "security",
             "testing",
+            # Labels and calls to action from links pointing to
+            # the company profile are not company names.
+            "zobaczprofilfirmy",
+            "zobaczprofilpracodawcy",
+            "viewcompanyprofile",
+            "companyprofile",
+            "ofirmie",
+            "aboutcompany",
+            "aplikuj",
+            "apply",
         }
 
-        if value.casefold() in blocked:
+        if normalized in blocked:
             return False
 
         if value.casefold().startswith(
