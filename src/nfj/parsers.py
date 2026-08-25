@@ -37,74 +37,124 @@ def extract_offer_details(body_text):
 # SALARY
 # ============================================================
 
+SALARY_PATTERN = (
+    r"(\d{1,3}(?:[ \t]+\d{3})+|\d+)"
+    r"[ \t]*[–-][ \t]*"
+    r"(\d{1,3}(?:[ \t]+\d{3})+|\d+)"
+    r"[ \t]*"
+    r"(PLN|EUR|USD)"
+)
+
+
+SALARY_PERIOD_PATTERNS = {
+    "hour": (
+        r"/\s*(?:h|hour)\b|"
+        r"\bper\s+hour\b|"
+        r"\bhourly\b|"
+        r"\b(?:stawka\s+)?godzin(?:a|ę|y|owa|owo)?\b|"
+        r"\bgodz\.?\b"
+    ),
+    "day": (
+        r"/\s*(?:d|day)\b|"
+        r"\bper\s+day\b|"
+        r"\bdaily\b|"
+        r"\b(?:stawka\s+)?dzienn(?:a|ie)\b|"
+        r"\bdzień\b|"
+        r"\bdzien\b"
+    ),
+    "month": (
+        r"/\s*(?:m|mo|month|mies|miesiąc)\b|"
+        r"\bper\s+month\b|"
+        r"\bmonthly\b|"
+        r"\bmiesięcz(?:nie|na|ny|nego)?\b|"
+        r"\bmiesiecz(?:nie|na|ny|nego)?\b|"
+        r"\bmiesiąc\b|"
+        r"\bmiesiac\b"
+    ),
+    "year": (
+        r"/\s*(?:y|yr|year)\b|"
+        r"\bper\s+(?:year|annum)\b|"
+        r"\bannual(?:ly)?\b|"
+        r"\byearly\b|"
+        r"\b(?:rocznie|roczna|roczny|rocznego)\b|"
+        r"\b(?:na\s+)?rok\b"
+    ),
+}
+
+
+def extract_salary_period(
+    text,
+    salary_start,
+    salary_end,
+    context_before=160,
+    context_after=200,
+):
+    """Return the period marker nearest to a salary range."""
+    context_start = max(
+        0,
+        salary_start - context_before,
+    )
+    context_end = min(
+        len(text),
+        salary_end + context_after,
+    )
+    context = text[
+        context_start:context_end
+    ]
+
+    salary_center = (
+        (salary_start + salary_end) / 2
+        - context_start
+    )
+    candidates = []
+
+    for period, pattern in (
+        SALARY_PERIOD_PATTERNS.items()
+    ):
+        for period_match in re.finditer(
+            pattern,
+            context,
+            re.IGNORECASE,
+        ):
+            period_center = (
+                period_match.start()
+                + period_match.end()
+            ) / 2
+            candidates.append(
+                (
+                    abs(period_center - salary_center),
+                    period_match.start(),
+                    period,
+                )
+            )
+
+    if not candidates:
+        return None
+
+    return min(candidates)[2]
+
+
 def parse_salary(text):
 
-    if not text:
+    salary_options = parse_salary_options(text)
+
+    if not salary_options:
         return None, None, None, None
 
-    text = text.replace("\xa0", " ")
-
-    pattern = (
-        r"(\d{1,3}(?:\s\d{3})*|\d+)"
-        r"\s*[–-]\s*"
-        r"(\d{1,3}(?:\s\d{3})*|\d+)"
-        r"\s*"
-        r"(PLN|EUR|USD)"
+    selected_option = next(
+        (
+            option
+            for option in salary_options
+            if option["period"] is not None
+        ),
+        salary_options[0],
     )
-
-    match = re.search(
-        pattern,
-        text,
-        re.IGNORECASE
-    )
-
-    if not match:
-        return None, None, None, None
-
-    try:
-        salary_min = int(
-            match.group(1).replace(" ", "")
-        )
-
-        salary_max = int(
-            match.group(2).replace(" ", "")
-        )
-
-    except ValueError:
-        return None, None, None, None
-
-    currency = match.group(3).upper()
-
-
-    salary_context = text[
-        match.end():match.end() + 120
-    ].lower()
-
-    salary_period = None
-
-    if re.search(
-        r"godzin|hour|hourly",
-        salary_context
-    ):
-        salary_period = "hour"
-
-    elif re.search(
-        r"dzień|dzien|daily|per day",
-        salary_context
-    ):
-        salary_period = "day"
-
-    elif re.search(
-        r"miesię|miesie|month|monthly",
-        salary_context
-    ):
-        salary_period = "month"
 
     return (
-        salary_min,
-        salary_max,
-        currency,
-        salary_period,
+        selected_option["salary_min"],
+        selected_option["salary_max"],
+        selected_option["currency"],
+        selected_option["period"],
     )
 
 
@@ -135,44 +185,66 @@ def parse_salary_options(text):
     else:
         salary_section = text
 
-    pattern = (
-        r"(\d{1,3}(?:\s\d{3})*|\d+)"
-        r"\s*[–-]\s*"
-        r"(\d{1,3}(?:\s\d{3})*|\d+)"
-        r"\s*"
-        r"(PLN|EUR|USD)"
-    )
-
     matches = list(
         re.finditer(
-            pattern,
+            SALARY_PATTERN,
             salary_section,
             re.IGNORECASE
         )
     )
 
+    # Salary cards are displayed directly before the application
+    # controls. Prefer them over salary ranges mentioned earlier in
+    # the description, where several contract variants may be mixed.
+    salary_card_matches = [
+        match
+        for match in matches
+        if len(salary_section) - match.end() <= 800
+    ]
+
+    if salary_card_matches:
+        matches = salary_card_matches
+
     salary_options = []
 
     for i, match in enumerate(matches):
+        if i > 0:
+            context_start = max(
+                matches[i - 1].end(),
+                match.start() - 80,
+            )
+        else:
+            context_start = max(
+                0,
+                match.start() - 80,
+            )
 
         if i + 1 < len(matches):
-            end = matches[i + 1].start()
+            context_end = matches[i + 1].start()
         else:
-            end = min(
+            context_end = min(
                 len(salary_section),
-                match.end() + 100
+                match.end() + 160,
             )
 
         context = salary_section[
-            match.start():end
+            context_start:context_end
         ]
 
         salary_min = int(
-            match.group(1).replace(" ", "")
+            re.sub(
+                r"[ \t]",
+                "",
+                match.group(1),
+            )
         )
 
         salary_max = int(
-            match.group(2).replace(" ", "")
+            re.sub(
+                r"[ \t]",
+                "",
+                match.group(2),
+            )
         )
 
         currency = match.group(3).upper()
@@ -202,30 +274,17 @@ def parse_salary_options(text):
         else:
             contract = None
 
-        # Salary period
-        if re.search(
-            r"miesięcz|miesiecz|month",
-            context,
-            re.IGNORECASE
-        ):
-            period = "month"
-
-        elif re.search(
-            r"godzin|hour",
-            context,
-            re.IGNORECASE
-        ):
-            period = "hour"
-
-        elif re.search(
-            r"dzien|dzień|daily|per day",
-            context,
-            re.IGNORECASE
-        ):
-            period = "day"
-
-        else:
-            period = None
+        period = extract_salary_period(
+            text=context,
+            salary_start=(
+                match.start() - context_start
+            ),
+            salary_end=(
+                match.end() - context_start
+            ),
+            context_before=80,
+            context_after=160,
+        )
 
         salary_options.append(
             {
@@ -740,61 +799,49 @@ def extract_company_info(
 # CATEGORY
 # ============================================================
 
-def extract_category(driver):
-    known_categories = [
-        "Fullstack",
-        "Backend",
-        "Frontend",
-        "Data",
-        "AI",
-        "DevOps",
-        "Security",
-        "Testing",
-        ".NET",
-        "Java",
-        "Python",
-        "Cloud",
-        "Mobile",
-        "ERP",
-        "Support",
-        "Architecture",
-        "Business Analysis",
-        "Project Manager",
-        "Product Management",
-        "Embedded",
-        "UX/UI",
-        "Blockchain",
-        "Game",
-    ]
-
-    elements = get_all_text(
-        driver,
-        [
-            "a[href*='/pl/']",
-        ],
-    )
-
-    categories = []
-
-    for value in elements:
-        for category in known_categories:
-            if value.lower() == category.lower():
-                categories.append(
-                    category
-                )
-
-    categories = list(
-        dict.fromkeys(
-            categories
+def extract_category(
+    driver,
+    body_text=None,
+):
+    try:
+        elements = driver.find_elements(
+            By.XPATH,
+            "//*[normalize-space()='Kategoria:' "
+            "or normalize-space()='Category:']"
+            "/following::a[normalize-space()][1]",
         )
-    )
 
-    if not categories:
+        for element in elements:
+            category = clean_text(
+                element.text
+            )
+
+            if category:
+                return category
+
+    except Exception:
+        pass
+
+    if not body_text:
         return None
 
-    return ", ".join(
-        categories
+    match = re.search(
+        r"(?:^|\n)[ \t]*"
+        r"(?:Kategoria|Category):[ \t]*"
+        r"(?:\r?\n)+[ \t]*"
+        r"([^\r\n]+)",
+        body_text,
+        re.IGNORECASE,
     )
+
+    if not match:
+        return None
+
+    category = clean_text(
+        match.group(1).split(",", 1)[0]
+    )
+
+    return category or None
 
 
 # ============================================================
@@ -945,27 +992,108 @@ def extract_contract_type(text):
 # REQUIRED SKILLS
 # ============================================================
 
+def _section_heading_pattern(heading):
+    return (
+        r"^[ \t]*(?:#+[ \t]*)?"
+        + re.escape(heading)
+        + r"[ \t]*:?[ \t]*$"
+    )
+
+
+def _find_section_heading(
+    text,
+    heading,
+    start=0,
+):
+    return re.search(
+        _section_heading_pattern(heading),
+        text[start:],
+        re.IGNORECASE | re.MULTILINE,
+    )
+
+
+def _extract_section_text(
+    text,
+    start_heading,
+    end_headings,
+    extra_end_patterns=None,
+    start_before_heading=None,
+):
+    if not text:
+        return None
+
+    start_match = _find_section_heading(
+        text,
+        start_heading,
+    )
+
+    if not start_match:
+        return None
+
+    content_start = start_match.end()
+
+    if start_before_heading:
+        boundary_match = _find_section_heading(
+            text,
+            start_before_heading,
+        )
+
+        if (
+            boundary_match
+            and start_match.start()
+            > boundary_match.start()
+        ):
+            return None
+
+    end_positions = []
+
+    for heading in end_headings:
+        end_match = _find_section_heading(
+            text,
+            heading,
+            start=content_start,
+        )
+
+        if end_match:
+            end_positions.append(
+                content_start
+                + end_match.start()
+            )
+
+    for pattern in extra_end_patterns or []:
+        end_match = re.search(
+            pattern,
+            text[content_start:],
+            re.IGNORECASE | re.MULTILINE,
+        )
+
+        if end_match:
+            end_positions.append(
+                content_start
+                + end_match.start()
+            )
+
+    content_end = (
+        min(end_positions)
+        if end_positions
+        else len(text)
+    )
+
+    value = clean_text(
+        text[content_start:content_end]
+    )
+
+    return value or None
+
+
 def extract_required_skills(body_text):
-    if not body_text:
-        return None
-
-    pattern = (
-        r"Obowiązkowe"
-        r"(.*?)"
-        r"(?:Mile widziane|Opis wymagań)"
-    )
-
-    match = re.search(
-        pattern,
-        body_text,
-        re.IGNORECASE | re.DOTALL,
-    )
-
-    if not match:
-        return None
-
-    return clean_text(
-        match.group(1)
+    return _extract_section_text(
+        text=body_text,
+        start_heading="Obowiązkowe",
+        end_headings=[
+            "Mile widziane",
+            "Opis wymagań",
+        ],
     )
 
 
@@ -974,26 +1102,14 @@ def extract_required_skills(body_text):
 # ============================================================
 
 def extract_nice_to_have(body_text):
-    if not body_text:
-        return None
-
-    pattern = (
-        r"Mile widziane"
-        r"(.*?)"
-        r"(?:Opis wymagań|Opis oferty)"
-    )
-
-    match = re.search(
-        pattern,
-        body_text,
-        re.IGNORECASE | re.DOTALL,
-    )
-
-    if not match:
-        return None
-
-    return clean_text(
-        match.group(1)
+    return _extract_section_text(
+        text=body_text,
+        start_heading="Mile widziane",
+        end_headings=[
+            "Opis wymagań",
+            "Opis oferty",
+        ],
+        start_before_heading="Opis wymagań",
     )
 
 
@@ -1002,26 +1118,14 @@ def extract_nice_to_have(body_text):
 # ============================================================
 
 def extract_requirements(body_text):
-    if not body_text:
-        return None
-
-    pattern = (
-        r"Opis wymagań"
-        r"(.*?)"
-        r"(?:Opis oferty|Zakres obowiązków)"
-    )
-
-    match = re.search(
-        pattern,
-        body_text,
-        re.IGNORECASE | re.DOTALL,
-    )
-
-    if not match:
-        return None
-
-    return clean_text(
-        match.group(1)
+    return _extract_section_text(
+        text=body_text,
+        start_heading="Opis wymagań",
+        end_headings=[
+            "Opis oferty",
+            "Zakres obowiązków",
+            "Szczegóły oferty",
+        ],
     )
 
 
@@ -1030,26 +1134,14 @@ def extract_requirements(body_text):
 # ============================================================
 
 def extract_offer_description(body_text):
-    if not body_text:
-        return None
-
-    pattern = (
-        r"Opis oferty"
-        r"(.*?)"
-        r"(?:Zakres obowiązków|Szczegóły oferty)"
-    )
-
-    match = re.search(
-        pattern,
-        body_text,
-        re.IGNORECASE | re.DOTALL,
-    )
-
-    if not match:
-        return None
-
-    return clean_text(
-        match.group(1)
+    return _extract_section_text(
+        text=body_text,
+        start_heading="Opis oferty",
+        end_headings=[
+            "Zakres obowiązków",
+            "Szczegóły oferty",
+            "O firmie",
+        ],
     )
 
 
@@ -1058,27 +1150,18 @@ def extract_offer_description(body_text):
 # ============================================================
 
 def extract_responsibilities(body_text):
-    if not body_text:
-        return None
-
-    pattern = (
-        r"Zakres obowiązków"
-        r"(.*?)"
-        r"(?:pokaż wszystko|"
-        r"Szczegóły oferty|O firmie)"
-    )
-
-    match = re.search(
-        pattern,
-        body_text,
-        re.IGNORECASE | re.DOTALL,
-    )
-
-    if not match:
-        return None
-
-    return clean_text(
-        match.group(1)
+    return _extract_section_text(
+        text=body_text,
+        start_heading="Zakres obowiązków",
+        end_headings=[
+            "Szczegóły oferty",
+            "O firmie",
+        ],
+        extra_end_patterns=[
+            r"^[ \t]*pokaż wszystko"
+            r"(?:[ \t]*\(\d+\))?"
+            r"[ \t]*$",
+        ],
     )
 
 

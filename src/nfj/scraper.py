@@ -1,6 +1,8 @@
 import time
 from datetime import datetime
 
+import pandas as pd
+
 from .config import (
     CHECKPOINT_EVERY,
     DEFAULT_DELAY,
@@ -126,7 +128,8 @@ def scrape_job(
     )
 
     category = extract_category(
-        driver
+        driver,
+        body_text=main_text,
     )
 
     requirements = extract_requirements(
@@ -162,7 +165,7 @@ def scrape_job(
         salary_max,
         salary_currency,
         salary_period,
-    ) = parse_salary(body_text)
+    ) = parse_salary(main_text)
 
     # Szukamy w całej głównej ofercie, nie tylko
     # w sekcji "Szczegóły oferty".
@@ -417,6 +420,144 @@ def scrape_jobs(
         f"Errors in this run: "
         f"{len(errors)}"
     )
+    print()
+    print("CSV:")
+    print(output_path)
+
+    return df_final
+
+
+# ============================================================
+# REFRESH MISSING SALARY PERIODS
+# ============================================================
+
+def refresh_missing_salary_periods(
+    output_path=OUTPUT_PATH,
+    error_path=ERROR_PATH,
+    max_jobs=None,
+    delay=DEFAULT_DELAY,
+    checkpoint_every=CHECKPOINT_EVERY,
+    headless=False,
+):
+    """Re-scrape only paid offers whose salary period is missing."""
+    results, _ = load_existing_results(
+        output_path
+    )
+
+    candidates = [
+        record
+        for record in results
+        if pd.isna(record.get("salary_period"))
+        and pd.notna(record.get("salary_min"))
+        and pd.notna(record.get("salary_max"))
+        and pd.notna(record.get("salary_currency"))
+        and pd.notna(record.get("url"))
+    ]
+
+    if max_jobs is not None:
+        candidates = candidates[:max_jobs]
+
+    print(
+        "Offers with missing salary period: "
+        f"{len(candidates)}"
+    )
+
+    if not candidates:
+        return pd.DataFrame(results)
+
+    records_by_url = {
+        record["url"]: record
+        for record in results
+        if pd.notna(record.get("url"))
+    }
+    driver = create_driver(
+        headless=headless
+    )
+    errors = []
+    updated = 0
+    unresolved = 0
+
+    try:
+        for index, record in enumerate(
+            candidates,
+            start=1,
+        ):
+            url = record["url"]
+
+            print()
+            print("=" * 70)
+            print(f"[{index}/{len(candidates)}]")
+            print(url)
+
+            try:
+                refreshed = scrape_job(
+                    driver=driver,
+                    url=url,
+                    delay=delay,
+                )
+
+                if refreshed.get("salary_period") is None:
+                    unresolved += 1
+                    print("UNRESOLVED: salary period is still missing")
+                    continue
+
+                target = records_by_url[url]
+
+                for column in (
+                    "salary_min",
+                    "salary_max",
+                    "salary_currency",
+                    "salary_period",
+                ):
+                    target[column] = refreshed.get(column)
+
+                updated += 1
+                print(
+                    "UPDATED:",
+                    refreshed.get("salary_period"),
+                )
+
+            except Exception as error:
+                print("ERROR:", error)
+                errors.append(
+                    {
+                        "url": url,
+                        "error": str(error),
+                        "scraped_at": datetime.now().strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        ),
+                    }
+                )
+
+            if (
+                updated > 0
+                and updated % checkpoint_every == 0
+            ):
+                save_results(
+                    results,
+                    output_path,
+                )
+                print("CHECKPOINT")
+
+    finally:
+        df_final = save_results(
+            results,
+            output_path,
+        )
+        save_errors(
+            errors,
+            error_path,
+        )
+        driver.quit()
+
+    print()
+    print("=" * 70)
+    print("SALARY PERIOD REFRESH COMPLETED")
+    print("=" * 70)
+    print(f"Checked: {len(candidates)}")
+    print(f"Updated: {updated}")
+    print(f"Still missing: {unresolved}")
+    print(f"Errors: {len(errors)}")
     print()
     print("CSV:")
     print(output_path)

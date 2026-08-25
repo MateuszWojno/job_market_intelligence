@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 
 import pandas as pd
 from selenium.webdriver.common.by import By
@@ -17,15 +18,17 @@ def collect_job_urls(
     max_pages_per_category=20,
     delay=DEFAULT_DELAY,
     headless=False,
+    max_empty_page_retries=2,
+    retry_delay=5.0,
 ):
 
 
     if categories is None:
         categories = CATEGORIES
 
-    driver = create_driver(
-        headless=headless
-    )
+    output_path = Path(output_path)
+
+    driver = create_driver(headless=headless)
 
     all_urls = set()
     statistics = []
@@ -54,34 +57,68 @@ def collect_job_urls(
                 print(url)
 
                 try:
-                    driver.get(url)
-                    time.sleep(delay)
-
-                    elements = driver.find_elements(
-                        By.CSS_SELECTOR,
-                        "a[href*='/job/']",
-                    )
-
                     page_urls = set()
 
-                    for element in elements:
-                        href = element.get_attribute(
-                            "href"
+                    for attempt in range(
+                        1,
+                        max_empty_page_retries + 2,
+                    ):
+                        driver.get(url)
+                        time.sleep(delay)
+
+                        elements = driver.find_elements(
+                            By.CSS_SELECTOR,
+                            "a[href*='/job/']",
                         )
 
-                        if not href:
-                            continue
+                        for element in elements:
+                            href = element.get_attribute(
+                                "href"
+                            )
 
-                        if "/job/" not in href:
-                            continue
+                            if not href or "/job/" not in href:
+                                continue
 
-                        href = (
-                            href
-                            .split("?")[0]
-                            .rstrip("/")
+                            href = (
+                                href
+                                .split("?")[0]
+                                .rstrip("/")
+                            )
+
+                            page_urls.add(href)
+
+                        if page_urls:
+                            break
+
+                        if (
+                            attempt
+                            <= max_empty_page_retries
+                        ):
+                            print(
+                                "Empty page - retrying in a "
+                                "new browser session "
+                                f"({attempt}/"
+                                f"{max_empty_page_retries})."
+                            )
+                            driver.quit()
+                            time.sleep(retry_delay)
+                            driver = create_driver(
+                                headless=headless
+                            )
+
+                    if not page_urls:
+                        if page == 1:
+                            raise RuntimeError(
+                                "The first category page remained "
+                                "empty after retries. URL collection "
+                                "is incomplete."
+                            )
+
+                        print(
+                            "Empty page after retries - "
+                            "treating it as the end of pagination."
                         )
-
-                        page_urls.add(href)
+                        break
 
                     new_category_urls = (
                         page_urls - category_urls
@@ -122,7 +159,10 @@ def collect_job_urls(
                     print(
                         f"Page {page} error: {error}"
                     )
-                    break
+                    raise RuntimeError(
+                        "URL collection failed. The existing URL "
+                        "file was not overwritten."
+                    ) from error
 
             statistics.append(
                 {
@@ -149,11 +189,17 @@ def collect_job_urls(
         }
     )
 
+    temporary_path = output_path.with_suffix(
+        ".tmp.csv"
+    )
+
     df_urls.to_csv(
-        output_path,
+        temporary_path,
         index=False,
         encoding="utf-8-sig",
     )
+
+    temporary_path.replace(output_path)
 
     df_stats = pd.DataFrame(
         statistics
