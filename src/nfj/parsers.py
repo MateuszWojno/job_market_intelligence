@@ -51,25 +51,23 @@ SALARY_PERIOD_PATTERNS = {
         r"/\s*(?:h|hour)\b|"
         r"\bper\s+hour\b|"
         r"\bhourly\b|"
-        r"\b(?:stawka\s+)?godzin(?:a|ę|y|owa|owo)?\b|"
+        r"\b(?:stawka[ \t]+)?godzinowa\b|"
+        r"\bgodzinowo\b|"
         r"\bgodz\.?\b"
     ),
     "day": (
         r"/\s*(?:d|day)\b|"
         r"\bper\s+day\b|"
         r"\bdaily\b|"
-        r"\b(?:stawka\s+)?dzienn(?:a|ie)\b|"
-        r"\bdzień\b|"
-        r"\bdzien\b"
+        r"\b(?:stawka[ \t]+)?dzienna\b|"
+        r"\bdziennie\b"
     ),
     "month": (
         r"/\s*(?:m|mo|month|mies|miesiąc)\b|"
         r"\bper\s+month\b|"
         r"\bmonthly\b|"
         r"\bmiesięcz(?:nie|na|ny|nego)?\b|"
-        r"\bmiesiecz(?:nie|na|ny|nego)?\b|"
-        r"\bmiesiąc\b|"
-        r"\bmiesiac\b"
+        r"\bmiesiecz(?:nie|na|ny|nego)?\b"
     ),
     "year": (
         r"/\s*(?:y|yr|year)\b|"
@@ -77,7 +75,7 @@ SALARY_PERIOD_PATTERNS = {
         r"\bannual(?:ly)?\b|"
         r"\byearly\b|"
         r"\b(?:rocznie|roczna|roczny|rocznego)\b|"
-        r"\b(?:na\s+)?rok\b"
+        r"\bna\s+rok\b"
     ),
 }
 
@@ -1093,6 +1091,9 @@ def extract_required_skills(body_text):
         end_headings=[
             "Mile widziane",
             "Opis wymagań",
+            "Opis oferty",
+            "Zakres obowiązków",
+            "Szczegóły oferty",
         ],
     )
 
@@ -1154,6 +1155,7 @@ def extract_responsibilities(body_text):
         text=body_text,
         start_heading="Zakres obowiązków",
         end_headings=[
+            "Opis oferty",
             "Szczegóły oferty",
             "O firmie",
         ],

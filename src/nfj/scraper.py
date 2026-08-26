@@ -47,6 +47,8 @@ class InvalidJobPageError(RuntimeError):
 
 
 INVALID_PAGE_MARKERS = (
+    "oferta pracy wygasła",
+    "oferta wygasła",
     "ta strona nie działa",
     "jeśli problem nie ustąpi",
     "this site can't be reached",
@@ -557,6 +559,130 @@ def refresh_missing_salary_periods(
     print(f"Checked: {len(candidates)}")
     print(f"Updated: {updated}")
     print(f"Still missing: {unresolved}")
+    print(f"Errors: {len(errors)}")
+    print()
+    print("CSV:")
+    print(output_path)
+
+    return df_final
+
+
+# ============================================================
+# REFRESH SELECTED JOBS
+# ============================================================
+
+def refresh_job_records(
+    urls,
+    output_path=OUTPUT_PATH,
+    error_path=ERROR_PATH,
+    max_jobs=None,
+    delay=DEFAULT_DELAY,
+    checkpoint_every=CHECKPOINT_EVERY,
+    headless=False,
+):
+    """Replace selected records after a successful fresh scrape."""
+    results, _ = load_existing_results(
+        output_path
+    )
+
+    record_indexes = {
+        record["url"]: index
+        for index, record in enumerate(results)
+        if pd.notna(record.get("url"))
+    }
+
+    selected_urls = list(
+        dict.fromkeys(
+            str(url).strip()
+            for url in urls
+            if pd.notna(url)
+            and str(url).strip() in record_indexes
+        )
+    )
+
+    if max_jobs is not None:
+        selected_urls = selected_urls[:max_jobs]
+
+    print(
+        "Selected jobs to refresh: "
+        f"{len(selected_urls)}"
+    )
+
+    if not selected_urls:
+        return pd.DataFrame(results)
+
+    driver = create_driver(
+        headless=headless
+    )
+    errors = []
+    updated = 0
+
+    try:
+        for index, url in enumerate(
+            selected_urls,
+            start=1,
+        ):
+            print()
+            print("=" * 70)
+            print(f"[{index}/{len(selected_urls)}]")
+            print(url)
+
+            try:
+                refreshed = scrape_job(
+                    driver=driver,
+                    url=url,
+                    delay=delay,
+                )
+
+                results[
+                    record_indexes[url]
+                ] = refreshed
+                updated += 1
+
+                print(
+                    "UPDATED:",
+                    refreshed.get("title"),
+                )
+
+            except Exception as error:
+                print("ERROR:", error)
+                errors.append(
+                    {
+                        "url": url,
+                        "error": str(error),
+                        "scraped_at": datetime.now().strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        ),
+                    }
+                )
+
+            if (
+                updated > 0
+                and updated % checkpoint_every == 0
+            ):
+                save_results(
+                    results,
+                    output_path,
+                )
+                print("CHECKPOINT")
+
+    finally:
+        df_final = save_results(
+            results,
+            output_path,
+        )
+        save_errors(
+            errors,
+            error_path,
+        )
+        driver.quit()
+
+    print()
+    print("=" * 70)
+    print("SELECTED JOB REFRESH COMPLETED")
+    print("=" * 70)
+    print(f"Selected: {len(selected_urls)}")
+    print(f"Updated: {updated}")
     print(f"Errors: {len(errors)}")
     print()
     print("CSV:")
