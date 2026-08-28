@@ -1,7 +1,10 @@
+import logging
 import time
 from datetime import datetime
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 from .config import (
     CHECKPOINT_EVERY,
@@ -253,10 +256,7 @@ def scrape_jobs(
     if max_jobs is not None:
         urls = urls[:max_jobs]
 
-    print(
-        f"URLs to check: "
-        f"{len(urls)}"
-    )
+    logger.info("URLs to check: %d", len(urls))
 
     results, scraped_urls = (
         load_existing_results(
@@ -264,10 +264,7 @@ def scrape_jobs(
         )
     )
 
-    print(
-        f"Already scraped: "
-        f"{len(scraped_urls)}"
-    )
+    logger.info("Already scraped: %d", len(scraped_urls))
 
     driver = create_driver(
         headless=headless
@@ -285,12 +282,12 @@ def scrape_jobs(
             if url in scraped_urls:
                 continue
 
-            print()
-            print("=" * 70)
-            print(
-                f"[{index}/{len(urls)}]"
+            logger.info(
+                "Scraping job %d/%d: %s",
+                index,
+                len(urls),
+                url,
             )
-            print(url)
 
             try:
                 job = scrape_job(
@@ -310,26 +307,17 @@ def scrape_jobs(
                 processed += 1
                 consecutive_page_errors = 0
 
-                print(
-                    "OK:",
+                logger.info(
+                    "Scraped job: %s | company=%s | category=%s",
                     job.get("title"),
-                )
-                print(
-                    "Company:",
                     job.get("company"),
-                )
-                print(
-                    "Category:",
                     job.get("category"),
                 )
 
             except InvalidJobPageError as error:
                 consecutive_page_errors += 1
 
-                print(
-                    "PAGE ERROR:",
-                    error,
-                )
+                logger.warning("Invalid job page: %s", error)
 
                 errors.append(
                     {
@@ -346,8 +334,7 @@ def scrape_jobs(
                     consecutive_page_errors
                     >= max_consecutive_page_errors
                 ):
-                    print()
-                    print(
+                    logger.error(
                         "Too many invalid NFJ pages in a row. "
                         "Stopping the scraper to protect data quality."
                     )
@@ -356,10 +343,7 @@ def scrape_jobs(
             except Exception as error:
                 consecutive_page_errors = 0
 
-                print(
-                    "ERROR:",
-                    error,
-                )
+                logger.exception("Failed to scrape job: %s", url)
 
                 errors.append(
                     {
@@ -386,11 +370,9 @@ def scrape_jobs(
                     error_path,
                 )
 
-                print()
-                print("CHECKPOINT")
-                print(
-                    f"Saved jobs: "
-                    f"{len(df_checkpoint)}"
+                logger.info(
+                    "Checkpoint saved: %d jobs",
+                    len(df_checkpoint),
                 )
 
     finally:
@@ -406,25 +388,13 @@ def scrape_jobs(
 
         driver.quit()
 
-    print()
-    print("=" * 70)
-    print("SCRAPING COMPLETED")
-    print("=" * 70)
-    print(
-        f"Total jobs: "
-        f"{len(df_final)}"
+    logger.info(
+        "Scraping completed: total=%d | new=%d | errors=%d | output=%s",
+        len(df_final),
+        processed,
+        len(errors),
+        output_path,
     )
-    print(
-        f"Newly scraped: "
-        f"{processed}"
-    )
-    print(
-        f"Errors in this run: "
-        f"{len(errors)}"
-    )
-    print()
-    print("CSV:")
-    print(output_path)
 
     return df_final
 
@@ -459,9 +429,9 @@ def refresh_missing_salary_periods(
     if max_jobs is not None:
         candidates = candidates[:max_jobs]
 
-    print(
-        "Offers with missing salary period: "
-        f"{len(candidates)}"
+    logger.info(
+        "Offers with missing salary period: %d",
+        len(candidates),
     )
 
     if not candidates:
@@ -486,10 +456,12 @@ def refresh_missing_salary_periods(
         ):
             url = record["url"]
 
-            print()
-            print("=" * 70)
-            print(f"[{index}/{len(candidates)}]")
-            print(url)
+            logger.info(
+                "Refreshing salary period %d/%d: %s",
+                index,
+                len(candidates),
+                url,
+            )
 
             try:
                 refreshed = scrape_job(
@@ -500,7 +472,10 @@ def refresh_missing_salary_periods(
 
                 if refreshed.get("salary_period") is None:
                     unresolved += 1
-                    print("UNRESOLVED: salary period is still missing")
+                    logger.warning(
+                        "Salary period is still missing: %s",
+                        url,
+                    )
                     continue
 
                 target = records_by_url[url]
@@ -514,13 +489,17 @@ def refresh_missing_salary_periods(
                     target[column] = refreshed.get(column)
 
                 updated += 1
-                print(
-                    "UPDATED:",
+                logger.info(
+                    "Salary period updated: %s | period=%s",
+                    url,
                     refreshed.get("salary_period"),
                 )
 
             except Exception as error:
-                print("ERROR:", error)
+                logger.exception(
+                    "Failed to refresh salary period: %s",
+                    url,
+                )
                 errors.append(
                     {
                         "url": url,
@@ -539,7 +518,10 @@ def refresh_missing_salary_periods(
                     results,
                     output_path,
                 )
-                print("CHECKPOINT")
+                logger.info(
+                    "Salary-period checkpoint saved: %d updates",
+                    updated,
+                )
 
     finally:
         df_final = save_results(
@@ -552,17 +534,15 @@ def refresh_missing_salary_periods(
         )
         driver.quit()
 
-    print()
-    print("=" * 70)
-    print("SALARY PERIOD REFRESH COMPLETED")
-    print("=" * 70)
-    print(f"Checked: {len(candidates)}")
-    print(f"Updated: {updated}")
-    print(f"Still missing: {unresolved}")
-    print(f"Errors: {len(errors)}")
-    print()
-    print("CSV:")
-    print(output_path)
+    logger.info(
+        "Salary-period refresh completed: checked=%d | updated=%d | "
+        "unresolved=%d | errors=%d | output=%s",
+        len(candidates),
+        updated,
+        unresolved,
+        len(errors),
+        output_path,
+    )
 
     return df_final
 
@@ -603,9 +583,9 @@ def refresh_job_records(
     if max_jobs is not None:
         selected_urls = selected_urls[:max_jobs]
 
-    print(
-        "Selected jobs to refresh: "
-        f"{len(selected_urls)}"
+    logger.info(
+        "Selected jobs to refresh: %d",
+        len(selected_urls),
     )
 
     if not selected_urls:
@@ -622,10 +602,12 @@ def refresh_job_records(
             selected_urls,
             start=1,
         ):
-            print()
-            print("=" * 70)
-            print(f"[{index}/{len(selected_urls)}]")
-            print(url)
+            logger.info(
+                "Refreshing selected job %d/%d: %s",
+                index,
+                len(selected_urls),
+                url,
+            )
 
             try:
                 refreshed = scrape_job(
@@ -639,13 +621,17 @@ def refresh_job_records(
                 ] = refreshed
                 updated += 1
 
-                print(
-                    "UPDATED:",
+                logger.info(
+                    "Selected job updated: %s | title=%s",
+                    url,
                     refreshed.get("title"),
                 )
 
             except Exception as error:
-                print("ERROR:", error)
+                logger.exception(
+                    "Failed to refresh selected job: %s",
+                    url,
+                )
                 errors.append(
                     {
                         "url": url,
@@ -664,7 +650,10 @@ def refresh_job_records(
                     results,
                     output_path,
                 )
-                print("CHECKPOINT")
+                logger.info(
+                    "Selected-job checkpoint saved: %d updates",
+                    updated,
+                )
 
     finally:
         df_final = save_results(
@@ -677,16 +666,14 @@ def refresh_job_records(
         )
         driver.quit()
 
-    print()
-    print("=" * 70)
-    print("SELECTED JOB REFRESH COMPLETED")
-    print("=" * 70)
-    print(f"Selected: {len(selected_urls)}")
-    print(f"Updated: {updated}")
-    print(f"Errors: {len(errors)}")
-    print()
-    print("CSV:")
-    print(output_path)
+    logger.info(
+        "Selected-job refresh completed: selected=%d | updated=%d | "
+        "errors=%d | output=%s",
+        len(selected_urls),
+        updated,
+        len(errors),
+        output_path,
+    )
 
     return df_final
 

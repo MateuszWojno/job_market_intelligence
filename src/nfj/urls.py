@@ -1,3 +1,4 @@
+import logging
 import time
 from pathlib import Path
 
@@ -10,6 +11,8 @@ from .config import (
     URLS_PATH,
 )
 from .driver import create_driver
+
+logger = logging.getLogger(__name__)
 
 
 def collect_job_urls(
@@ -35,10 +38,7 @@ def collect_job_urls(
 
     try:
         for category in categories:
-            print()
-            print("=" * 70)
-            print(f"Category: {category}")
-            print("=" * 70)
+            logger.info("Collecting category: %s", category)
 
             category_urls = set()
             global_before = len(all_urls)
@@ -52,9 +52,11 @@ def collect_job_urls(
                     f"{category}?page={page}"
                 )
 
-                print()
-                print(f"Page {page}:")
-                print(url)
+                logger.info(
+                    "Collecting category page %d: %s",
+                    page,
+                    url,
+                )
 
                 try:
                     page_urls = set()
@@ -94,7 +96,7 @@ def collect_job_urls(
                             attempt
                             <= max_empty_page_retries
                         ):
-                            print(
+                            logger.warning(
                                 "Empty page - retrying in a "
                                 "new browser session "
                                 f"({attempt}/"
@@ -114,7 +116,7 @@ def collect_job_urls(
                                 "is incomplete."
                             )
 
-                        print(
+                        logger.info(
                             "Empty page after retries - "
                             "treating it as the end of pagination."
                         )
@@ -131,33 +133,27 @@ def collect_job_urls(
                         page_urls
                     )
 
-                    print(
-                        f"URL-i on page: "
-                        f"{len(page_urls)}"
-                    )
-                    print(
-                        f"New in category: "
-                        f"{len(new_category_urls)}"
-                    )
-                    print(
-                        "Unique in category: "
-                        f"{len(category_urls)}"
-                    )
-                    print(
-                        f"Total globally: "
-                        f"{len(all_urls)}"
+                    logger.info(
+                        "Page collected: urls=%d | new_in_category=%d | "
+                        "category_total=%d | global_total=%d",
+                        len(page_urls),
+                        len(new_category_urls),
+                        len(category_urls),
+                        len(all_urls),
                     )
 
                     if not new_category_urls:
-                        print(
+                        logger.info(
                             "No new offers in category - "
                             "stopping category."
                         )
                         break
 
                 except Exception as error:
-                    print(
-                        f"Page {page} error: {error}"
+                    logger.exception(
+                        "URL collection failed for category=%s page=%d",
+                        category,
+                        page,
                     )
                     raise RuntimeError(
                         "URL collection failed. The existing URL "
@@ -205,19 +201,14 @@ def collect_job_urls(
         statistics
     )
 
-    print()
-    print("=" * 70)
-    print("URL COLLECTION COMPLETED")
-    print("=" * 70)
-    print(
-        f"Total unique URLs: "
-        f"{len(df_urls)}"
+    logger.info(
+        "URL collection completed: total_unique_urls=%d | output=%s",
+        len(df_urls),
+        output_path,
     )
-    print()
-    print("Statistics:")
-    print(df_stats)
-    print()
-    print("Saved URLs:")
-    print(output_path)
+    logger.info(
+        "URL collection statistics:\n%s",
+        df_stats.to_string(index=False),
+    )
 
     return df_urls, df_stats
