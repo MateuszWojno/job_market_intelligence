@@ -1,0 +1,13 @@
+# Data processing and visualization
+numpy==1.26.4
+pandas==2.2.2
+plotly==5.24.1
+
+# Data collection
+selenium==4.48.0
+
+# Notebook environment
+jupyterlab==4.2.5
+
+# Testing
+pytest==7.4.4
