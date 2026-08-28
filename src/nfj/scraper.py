@@ -172,8 +172,6 @@ def scrape_job(
         salary_period,
     ) = parse_salary(main_text)
 
-    # Szukamy w całej głównej ofercie, nie tylko
-    # w sekcji "Szczegóły oferty".
     contract_type = extract_contract_type(
         main_text
     )

@@ -191,9 +191,7 @@ def parse_salary_options(text):
         )
     )
 
-    # Salary cards are displayed directly before the application
-    # controls. Prefer them over salary ranges mentioned earlier in
-    # the description, where several contract variants may be mixed.
+
     salary_card_matches = [
         match
         for match in matches
@@ -324,7 +322,6 @@ def parse_experience(text):
             experience = level
             break
 
-    # Najpierw zakresy: "7-10 lat" -> 7
     range_patterns = [
         r"(\d+)\s*[–-]\s*(\d+)\s*(?:lat|lata|years?)",
         r"(\d+)\s*to\s*(\d+)\s*years?",
@@ -343,7 +340,6 @@ def parse_experience(text):
             )
             break
 
-    # Jeśli nie ma zakresu, szukamy wartości minimalnej.
     if experience_years_min is None:
         patterns = [
             r"(?:min(?:imum)?\.?\s*)?(\d+)\+?\s*(?:lat|lata|rok|roku)",
@@ -378,7 +374,6 @@ def parse_workplace(text):
     if not text:
         return None
 
-    # Hybryda musi być sprawdzana przed Remote.
     if re.search(
         r"Hybryd|"
         r"Praca zdalna przez\s+\d+\s+dni?|"
@@ -457,8 +452,6 @@ def extract_company_info(
         if not normalized:
             return False
 
-        # Najważniejsza poprawka:
-        # tytuł oferty NIE może zostać firmą.
         if normalized == normalized_title:
             return False
 
@@ -480,8 +473,6 @@ def extract_company_info(
             "devops",
             "security",
             "testing",
-            # Labels and calls to action from links pointing to
-            # the company profile are not company names.
             "zobaczprofilfirmy",
             "zobaczprofilpracodawcy",
             "viewcompanyprofile",
@@ -516,7 +507,7 @@ def extract_company_info(
         return True
 
     # --------------------------------------------------------
-    # 1. Kandydaci z DOM
+    # 1. CANDIDATES FROM DOM
     # --------------------------------------------------------
 
     selectors = [
@@ -632,7 +623,7 @@ def extract_company_info(
             pass
 
     # --------------------------------------------------------
-    # 3. Nagłówek strony
+    # 3. PAGE HEADER
     # --------------------------------------------------------
 
     if not company and body_text:
@@ -654,8 +645,7 @@ def extract_company_info(
                 title_index + 1:
                 title_index + 10
             ]:
-                # Gdy dotarliśmy do kategorii,
-                # firma powinna już być wcześniej.
+
                 if candidate.casefold().startswith(
                     (
                         "kategoria",
@@ -674,7 +664,7 @@ def extract_company_info(
                 break
 
     # --------------------------------------------------------
-    # 4. Sekcja O firmie
+    # 4. COMPANY SECTION
     # --------------------------------------------------------
 
     if not company:
@@ -903,7 +893,6 @@ def extract_job_locations(
                 if value:
                     return value
 
-    # Fallback z URL-a
     if url:
         try:
             slug = (
