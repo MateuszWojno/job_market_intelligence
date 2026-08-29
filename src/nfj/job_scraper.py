@@ -3,13 +3,25 @@ from datetime import datetime
 
 from .config import DEFAULT_DELAY
 from .driver import create_driver
-from .parsers import (
-    extract_category, extract_company_info, extract_contract_type,
-    extract_job_locations, extract_nice_to_have, extract_offer_description,
-    extract_offer_details, extract_required_skills, extract_requirements,
-    extract_responsibilities, extract_start_date, extract_valid_until,
-    parse_experience, parse_salary, parse_workplace,
+from .company_parser import extract_company_info
+from .experience_parser import parse_experience
+from .job_details_parser import (
+    extract_category,
+    extract_contract_type,
+    extract_offer_details,
+    extract_start_date,
+    extract_valid_until,
 )
+from .location_parser import extract_job_locations
+from .salary_parser import parse_salary
+from .section_parser import (
+    extract_nice_to_have,
+    extract_offer_description,
+    extract_required_skills,
+    extract_requirements,
+    extract_responsibilities,
+)
+from .workplace_parser import parse_workplace
 from .utils import get_body_text, get_job_id, get_main_offer_text, get_text
 
 
