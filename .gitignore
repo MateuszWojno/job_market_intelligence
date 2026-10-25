@@ -197,3 +197,6 @@ data/raw/*test*.csv
 
 # Temporary files
 *.tmp.idea/
+
+# Generated Plotly charts
+notebooks/iframe_figures/
