@@ -272,3 +272,33 @@ error handling.
 **Mateusz Wojno**
 
 [GitHub](https://github.com/MateuszWojno)
+
+
+## PostgreSQL modeling workflow
+
+`notebooks/Modeling.ipynb` is the single modeling notebook. It reads the complete
+cleaned dataset from PostgreSQL and separates August development data from later
+retrievals internally. The earlier model scores in this README refer to the
+original random-split experiment preserved in Git history; new grouped and
+later-collection results are not directly comparable.
+
+1. Start PostgreSQL and complete the cleaning/upsert notebook.
+2. For the first model version, set `RUN_TRAINING = True` in `Modeling.ipynb`.
+   Choose a new `MODEL_VERSION`; existing versions are never overwritten.
+3. Run all cells. Grouped CV compares five regressors and a median baseline;
+   predefined XGBoost variants and hyperparameters are evaluated on August only.
+4. For subsequent monitoring, set `RUN_TRAINING = False` and select the saved
+   version. Set the evaluation date bounds as needed. No model is fitted in this mode.
+5. Review the baseline comparison, sample counts and errors by experience.
+
+Local models, metadata and evaluation manifests are stored in
+`artifacts/modeling/` (ignored by Git). Artifacts contain the fixed technology
+mapping, training IDs/content fingerprints, a training-data hash, library
+versions and fitted preprocessing. Load only trusted joblib artifacts.
+Retain the same Python/library environment for evaluation.
+
+Retrieval dates are not publication dates. Exact-content overlap is excluded
+from later evaluation, but edited repostings may remain. Repeated monitoring
+windows are not independent tests. After tuning based on their results,
+reserve later collections for a new independent assessment. The current table
+is mutable; manifest hashes detect provenance but are not full data snapshots.

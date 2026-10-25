@@ -200,3 +200,6 @@ data/raw/*test*.csv
 
 # Generated Plotly charts
 notebooks/iframe_figures/
+
+# Local model versions and evaluation artifacts
+artifacts/modeling/

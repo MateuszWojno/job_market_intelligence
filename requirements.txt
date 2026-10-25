@@ -6,6 +6,7 @@ plotly==5.24.1
 # Machine learning
 scikit-learn==1.7.2
 xgboost==3.2.0
+joblib==1.5.3
 
 # Data collection
 selenium==4.48.0
