@@ -302,3 +302,50 @@ from later evaluation, but edited repostings may remain. Repeated monitoring
 windows are not independent tests. After tuning based on their results,
 reserve later collections for a new independent assessment. The current table
 is mutable; manifest hashes detect provenance but are not full data snapshots.
+
+
+## Weekly collection on Windows
+
+`tools/collect_weekly.py` runs URL collection and incremental scraping without
+Jupyter, in headless Chrome, with a three-second delay. It retains old offers
+and adds previously unseen URLs to the same `data/raw/nofluff_it_jobs.csv`.
+Retrieval timestamps remain attached to individual offers. This task does not
+run cleaning, update PostgreSQL, retrain models or refresh Power BI.
+
+Register the task once in PowerShell, using the Python environment that has
+this project's requirements installed (adjust the interpreter path):
+
+```powershell
+.\tools\register_weekly_collection.ps1 -PythonPath 'G:\pandas\.venv\Scripts\python.exe' -Day Saturday -Time '08:00'
+```
+
+The schedule uses the Windows local timezone. It runs under your logged-in
+Windows account, without administrator rights or storing a password. The PC
+must be on, the user logged in, and Chrome, internet access and the project
+available. `StartWhenAvailable` lets Windows start a missed trigger when the
+conditions allow; it does not wake a powered-off computer. Battery operation
+is allowed. A running instance is not duplicated; the execution limit is 12 hours.
+Do not run notebook scraping or refresh operations while the scheduled collector
+is running, since they do not use the scheduled collector's process lock.
+
+Each run writes `summary.json`, logs, discovered URLs and category statistics
+under `artifacts/collection/runs/`. The previous raw CSV is backed up as
+`artifacts/collection/jobs_before_latest_run.csv`. Valid new records are
+published atomically; failed validation leaves the working CSV unchanged.
+Failed runs may retain a staging CSV for diagnosis. Logs are local and ignored
+by Git; review disk usage periodically.
+
+Exit codes: 0 = complete, 1 = failure, 2 = partial collection (some discovered
+URLs have no record), 3 = another scheduled collector holds the lock. A partial
+run preserves valid new offers; unresolved URLs can be attempted again later.
+A successful run does not guarantee complete portal coverage: category pagination
+limits and site changes still require review.
+
+Inspect the task with:
+
+```powershell
+Get-ScheduledTaskInfo -TaskName 'JobMarketIntelligence-WeeklyCollection'
+```
+
+Use Windows Task Scheduler to change, disable or delete the schedule. Review
+the latest run summary before running data preparation and the PostgreSQL upsert.

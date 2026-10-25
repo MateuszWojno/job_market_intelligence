@@ -203,3 +203,6 @@ notebooks/iframe_figures/
 
 # Local model versions and evaluation artifacts
 artifacts/modeling/
+
+# Scheduled collection logs, backup and staging files
+artifacts/collection/

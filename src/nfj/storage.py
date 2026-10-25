@@ -1,3 +1,7 @@
+import os
+import tempfile
+from pathlib import Path
+
 import pandas as pd
 
 from .config import (
@@ -74,6 +78,26 @@ def load_existing_results(
     return records, scraped_urls
 
 
+def atomic_csv(df, output_path):
+    """Replace a CSV only after its complete contents have been written."""
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8-sig", newline="",
+            dir=output_path.parent, suffix=".tmp", delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            df.to_csv(handle, index=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, output_path)
+    finally:
+        if temporary is not None and temporary.exists():
+            temporary.unlink()
+
+
 def save_results(
     results,
     output_path=OUTPUT_PATH,
@@ -91,11 +115,7 @@ def save_results(
             keep="last",
         )
 
-    df.to_csv(
-        output_path,
-        index=False,
-        encoding="utf-8-sig",
-    )
+    atomic_csv(df, output_path)
 
     return df
 
@@ -111,8 +131,4 @@ def save_errors(
         errors
     )
 
-    df_errors.to_csv(
-        error_path,
-        index=False,
-        encoding="utf-8-sig",
-    )
+    atomic_csv(df_errors, error_path)
