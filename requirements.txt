@@ -13,6 +13,10 @@ selenium==4.48.0
 
 # Notebook environment
 jupyterlab==4.2.5
+nbclient>=0.10,<0.11
+nbformat>=5.10,<6
+ipykernel>=6.29,<7
+python-dotenv>=1,<2
 
 # Testing
 pytest==7.4.4

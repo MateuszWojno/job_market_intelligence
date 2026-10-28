@@ -15,7 +15,7 @@ $entryPoint = Join-Path $PSScriptRoot 'collect_weekly.py'
 if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
     throw "Task '$TaskName' already exists. Edit it in Task Scheduler instead of creating a duplicate."
 }
-& $resolvedPython -c 'import pandas, selenium'
+& $resolvedPython -c 'import pandas, selenium, nbclient, nbformat, ipykernel, dotenv, sqlalchemy, psycopg'
 if ($LASTEXITCODE -ne 0) { throw 'The selected Python environment cannot import scraper dependencies.' }
 
 $action = New-ScheduledTaskAction -Execute $resolvedPython `
@@ -29,5 +29,5 @@ $userId = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $principal = New-ScheduledTaskPrincipal -UserId $userId -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
     -Settings $settings -Principal $principal `
-    -Description 'Weekly incremental NFJ collection to raw CSV. Requires a logged-in user; no database writes.'
+    -Description 'Weekly NFJ collection, pandas preparation notebook and PostgreSQL upsert. Requires logged-in user and running PostgreSQL.'
 Get-ScheduledTaskInfo -TaskName $TaskName | Select-Object TaskName, NextRunTime, LastTaskResult

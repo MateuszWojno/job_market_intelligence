@@ -1,4 +1,4 @@
-"""Unattended incremental collection. Does not clean data or write to PostgreSQL."""
+"""Collect new offers, then execute the pandas notebook and update PostgreSQL."""
 
 import argparse
 from contextlib import contextmanager
@@ -9,8 +9,12 @@ from pathlib import Path
 import shutil
 import sys
 
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "tools"))
+
+from run_preparation import execute_preparation
 
 from nfj.config import OUTPUT_PATH, URLS_PATH
 from nfj.pipeline import scrape_jobs
@@ -66,7 +70,8 @@ def validate_records(frame):
 
 
 def run_collection(output_path=OUTPUT_PATH, urls_path=URLS_PATH,
-                   artifact_dir=ROOT / "artifacts" / "collection", delay=3.0):
+                   artifact_dir=ROOT / "artifacts" / "collection", delay=3.0,
+                   prepare=True):
     output_path, urls_path, artifact_dir = map(Path, (output_path, urls_path, artifact_dir))
     with collection_lock(artifact_dir / "collection.lock"):
         run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
@@ -76,7 +81,8 @@ def run_collection(output_path=OUTPUT_PATH, urls_path=URLS_PATH,
         file_log.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
         logging.getLogger().addHandler(file_log)
         summary = {"run_id": run_id, "started_at_utc": datetime.now(timezone.utc).isoformat(),
-                   "status": "failed", "output_path": str(output_path)}
+                   "status": "failed", "output_path": str(output_path),
+                   "preparation_status": "not_started"}
         try:
             existing = pd.read_csv(output_path) if output_path.exists() else pd.DataFrame()
             if output_path.exists():
@@ -117,9 +123,19 @@ def run_collection(output_path=OUTPUT_PATH, urls_path=URLS_PATH,
             summary.update(records_after=len(results), new_records=len(results) - len(existing),
                            urls_without_record=len(missing),
                            status="partial" if missing else "complete")
+            if prepare and not missing:
+                summary["preparation_status"] = "running"
+                LOGGER.info("Executing pandas preparation notebook and database upsert.")
+                execute_preparation(run_dir, raw_path=output_path)
+                summary["preparation_status"] = "complete"
+            else:
+                summary["preparation_status"] = "skipped_partial_collection" if missing else "disabled"
             LOGGER.info("Collection summary: %s", summary)
             return 2 if missing else 0
         except Exception as error:
+            summary["status"] = "failed"
+            if summary["preparation_status"] == "running":
+                summary["preparation_status"] = "failed"
             summary["error"] = str(error)
             LOGGER.exception("Collection failed; inspect this run's logs and staging CSV.")
             return 1
@@ -133,12 +149,14 @@ def run_collection(output_path=OUTPUT_PATH, urls_path=URLS_PATH,
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--delay", type=float, default=3.0)
+    parser.add_argument("--collection-only", action="store_true",
+                        help="Collect raw CSV without cleaning or updating PostgreSQL.")
     args = parser.parse_args()
     if args.delay < 3:
         parser.error("Use at least 3 seconds between requests.")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     try:
-        return run_collection(delay=args.delay)
+        return run_collection(delay=args.delay, prepare=not args.collection_only)
     except RuntimeError as error:
         LOGGER.error("%s", error)
         return 3

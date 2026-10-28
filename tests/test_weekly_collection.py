@@ -22,6 +22,8 @@ def record(name):
 
 class WeeklyCollectionTests(unittest.TestCase):
     def setUp(self):
+        self.preparation = patch.object(module, "execute_preparation").start()
+        self.addCleanup(patch.stopall)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
@@ -51,6 +53,7 @@ class WeeklyCollectionTests(unittest.TestCase):
         self.assertEqual(pd.read_csv(self.output)["job_id"].tolist(), ["old", "new"])
         self.assertEqual(self.summary()["new_records"], 1)
         self.assertEqual(self.summary()["status"], "complete")
+        self.preparation.assert_called_once()
 
     def test_partial_run_reports_missing_urls(self):
         with patch.object(module, "collect_job_urls", self.collect(["old", "new", "failed"])), patch.object(
@@ -58,6 +61,7 @@ class WeeklyCollectionTests(unittest.TestCase):
         ):
             self.assertEqual(module.run_collection(*self.paths), 2)
         self.assertEqual(self.summary()["status"], "partial")
+        self.preparation.assert_not_called()
         self.assertEqual(self.summary()["urls_without_record"], 1)
 
     def test_invalid_results_leave_original_unchanged(self):
@@ -101,3 +105,11 @@ class WeeklyCollectionTests(unittest.TestCase):
                     self.fail("Concurrent lock was acquired")
         with module.collection_lock(lock):
             pass
+
+    def test_preparation_failure_marks_run_failed_and_keeps_raw(self):
+        self.preparation.side_effect = RuntimeError("Notebook cell failed")
+        with patch.object(module, "collect_job_urls", self.collect(["old"])):
+            self.assertEqual(module.run_collection(*self.paths), 1)
+        self.assertEqual(self.summary()["preparation_status"], "failed")
+        self.assertEqual(self.summary()["status"], "failed")
+        self.assertEqual(len(pd.read_csv(self.output)), 1)
