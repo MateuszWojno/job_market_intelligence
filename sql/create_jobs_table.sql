@@ -1,4 +1,16 @@
-CREATE TABLE IF NOT EXISTS public.nofluff_it_jobs_clean (
+-- Serialize schema initialization and weekly writes in this transaction.
+SELECT pg_advisory_xact_lock(94176203);
+
+DO $migration$
+BEGIN
+    IF to_regclass('public.job_offers') IS NULL
+       AND to_regclass('public.nofluff_it_jobs_clean') IS NOT NULL THEN
+        ALTER TABLE public.nofluff_it_jobs_clean RENAME TO job_offers;
+    END IF;
+END
+$migration$;
+
+CREATE TABLE IF NOT EXISTS public.job_offers (
     job_id text PRIMARY KEY,
     url text NOT NULL,
     title text,
@@ -37,4 +49,30 @@ CREATE TABLE IF NOT EXISTS public.nofluff_it_jobs_clean (
     salary_normalization_eligible boolean,
     salary_analysis_eligible boolean,
     salary_exchange_rate_date date
+);
+
+DO $migration$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'public.job_offers'::regclass AND contype = 'p'
+    ) THEN
+        IF to_regclass('public.uq_nofluff_jobs_job_id') IS NOT NULL THEN
+            ALTER TABLE public.job_offers ADD CONSTRAINT job_offers_pkey
+                PRIMARY KEY USING INDEX uq_nofluff_jobs_job_id;
+        ELSE
+            ALTER TABLE public.job_offers ADD PRIMARY KEY (job_id);
+        END IF;
+    END IF;
+
+    IF to_regclass('public.nofluff_it_jobs_clean') IS NULL THEN
+        CREATE VIEW public.nofluff_it_jobs_clean AS SELECT * FROM public.job_offers;
+    END IF;
+END
+$migration$;
+
+CREATE TABLE IF NOT EXISTS public.offer_contract_types (
+    job_id text REFERENCES public.job_offers(job_id) ON DELETE CASCADE,
+    contract_type text NOT NULL,
+    PRIMARY KEY (job_id, contract_type)
 );

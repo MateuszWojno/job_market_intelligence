@@ -1,0 +1,39 @@
+Python
+SQL
+Java
+JavaScript
+TypeScript
+C#
+C++
+.NET
+React
+Angular
+Vue.js
+Node.js
+Spring
+Spring Boot
+pandas
+NumPy
+scikit-learn
+TensorFlow
+PyTorch
+Power BI
+Tableau
+Excel
+AWS
+Azure
+GCP
+Docker
+Kubernetes
+Terraform
+Git
+Jenkins
+Linux
+Spark
+Kafka
+Snowflake
+PostgreSQL
+MongoDB
+Oracle
+REST API
+Machine Learning
