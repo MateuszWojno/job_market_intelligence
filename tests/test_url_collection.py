@@ -7,6 +7,28 @@ from nfj.urls import collect_job_urls
 
 
 class UrlCollectionTests(unittest.TestCase):
+    def test_mixed_results_only_queue_verified_it_cards(self):
+        def card(slug, category):
+            element = Mock()
+            element.get_attribute.side_effect = {
+                "href": "https://nofluffjobs.com/pl/job/" + slug,
+                "class": "posting-list-item posting-list-item--" + category,
+            }.get
+            return element
+
+        driver = Mock()
+        driver.find_element.return_value.text = "Znalezione oferty pracy"
+        driver.find_elements.side_effect = [
+            [card("recruiter-it", "hr"), card("engineer", "finance")],
+            [card("analyst", "businessIntelligence"), card("buyer", "logistics")],
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "urls.csv"
+            with patch("nfj.urls.create_driver", return_value=driver), patch("nfj.urls.time.sleep"):
+                urls, _ = collect_job_urls(categories=["data"], output_path=output, max_pages_per_category=2)
+            self.assertEqual(urls["url"].tolist(), ["https://nofluffjobs.com/pl/job/analyst"])
+            self.assertNotIn("recruiter", output.read_text(encoding="utf-8-sig"))
+
     def test_blocked_response_preserves_urls_and_stops_without_retry(self):
         driver = Mock()
         driver.find_element.return_value.text = "403 ERROR Request blocked. CloudFront"

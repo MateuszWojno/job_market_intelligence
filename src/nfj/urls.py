@@ -14,6 +14,9 @@ from .driver import create_driver
 
 logger = logging.getLogger(__name__)
 
+# NFJ cards use camelCase category IDs; listing routes use hyphens.
+IT_CARD_CATEGORIES = {slug.replace("-", "") for slug in CATEGORIES}
+
 
 def collect_job_urls(
     categories=None,
@@ -41,6 +44,7 @@ def collect_job_urls(
             logger.info("Collecting category: %s", category)
 
             category_urls = set()
+            seen_listing_urls = set()
             global_before = len(all_urls)
 
             for page in range(
@@ -60,6 +64,7 @@ def collect_job_urls(
 
                 try:
                     page_urls = set()
+                    listing_urls = set()
 
                     for attempt in range(
                         1,
@@ -77,7 +82,7 @@ def collect_job_urls(
 
                         elements = driver.find_elements(
                             By.CSS_SELECTOR,
-                            "a[href*='/job/']",
+                            "a.posting-list-item[href*='/job/']",
                         )
 
                         for element in elements:
@@ -94,9 +99,16 @@ def collect_job_urls(
                                 .rstrip("/")
                             )
 
-                            page_urls.add(href)
+                            listing_urls.add(href)
+                            classes = (element.get_attribute("class") or "").split()
+                            for token in classes:
+                                if token.startswith("posting-list-item--"):
+                                    card_category = token.split("--", 1)[1].lower().replace("-", "")
+                                    if card_category in IT_CARD_CATEGORIES:
+                                        page_urls.add(href)
+                                    break
 
-                        if page_urls:
+                        if listing_urls:
                             break
 
                         if (
@@ -115,7 +127,7 @@ def collect_job_urls(
                                 headless=headless
                             )
 
-                    if not page_urls:
+                    if not listing_urls:
                         if page == 1:
                             raise RuntimeError(
                                 "The first category page remained "
@@ -149,12 +161,13 @@ def collect_job_urls(
                         len(all_urls),
                     )
 
-                    if not new_category_urls:
+                    if listing_urls.issubset(seen_listing_urls):
                         logger.info(
                             "No new offers in category - "
                             "stopping category."
                         )
                         break
+                    seen_listing_urls.update(listing_urls)
 
                 except Exception as error:
                     logger.exception(
@@ -185,6 +198,9 @@ def collect_job_urls(
 
     finally:
         driver.quit()
+
+    if not all_urls:
+        raise RuntimeError("No verified IT cards collected; the existing URL file was preserved.")
 
     df_urls = pd.DataFrame(
         {

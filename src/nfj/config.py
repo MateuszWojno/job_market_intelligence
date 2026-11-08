@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -12,30 +13,4 @@ ERROR_PATH = DATA_DIR / "nofluff_scraping_errors.csv"
 DEFAULT_DELAY = 1.0
 CHECKPOINT_EVERY = 25
 
-CATEGORIES = [
-    "it",
-    "backend",
-    "frontend",
-    "fullstack",
-    "data",
-    "ai",
-    "devops",
-    "security",
-    "testing",
-    "java",
-    ".net",
-    "python",
-    "mobile",
-    "cloud",
-    "architecture",
-    "business-analysis",
-    "project-manager",
-    "product-management",
-    "support",
-    "erp",
-    "embedded",
-    "qa",
-    "ux-ui",
-    "blockchain",
-    "game",
-]
+CATEGORIES = list(json.loads((PROJECT_ROOT / "config" / "it_categories.json").read_text(encoding="utf-8")))
