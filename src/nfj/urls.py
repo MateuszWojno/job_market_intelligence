@@ -68,6 +68,13 @@ def collect_job_urls(
                         driver.get(url)
                         time.sleep(delay)
 
+                        body_text = driver.find_element(By.TAG_NAME, "body").text
+                        if "403 ERROR" in body_text and "Request blocked" in body_text:
+                            raise RuntimeError(
+                                "Server returned 403 Request blocked (CloudFront); "
+                                "this is not an empty job listing."
+                            )
+
                         elements = driver.find_elements(
                             By.CSS_SELECTOR,
                             "a[href*='/job/']",
@@ -157,7 +164,7 @@ def collect_job_urls(
                     )
                     raise RuntimeError(
                         "URL collection failed. The existing URL "
-                        "file was not overwritten."
+                        f"file was not overwritten. Cause: {error}"
                     ) from error
 
             statistics.append(

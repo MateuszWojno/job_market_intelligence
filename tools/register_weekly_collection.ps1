@@ -19,7 +19,7 @@ if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
 if ($LASTEXITCODE -ne 0) { throw 'The selected Python environment cannot import scraper dependencies.' }
 
 $action = New-ScheduledTaskAction -Execute $resolvedPython `
-    -Argument ('"{0}" --delay 3' -f $entryPoint) -WorkingDirectory $projectPath
+    -Argument ('"{0}" --delay 3 --headed' -f $entryPoint) -WorkingDirectory $projectPath
 $atTime = [datetime]::Today.Add([TimeSpan]::Parse($Time))
 $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $Day -At $atTime
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable `

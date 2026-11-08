@@ -71,7 +71,7 @@ def validate_records(frame):
 
 def run_collection(output_path=OUTPUT_PATH, urls_path=URLS_PATH,
                    artifact_dir=ROOT / "artifacts" / "collection", delay=3.0,
-                   prepare=True):
+                   prepare=True, headless=True):
     output_path, urls_path, artifact_dir = map(Path, (output_path, urls_path, artifact_dir))
     with collection_lock(artifact_dir / "collection.lock"):
         run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
@@ -93,7 +93,7 @@ def run_collection(output_path=OUTPUT_PATH, urls_path=URLS_PATH,
             summary["records_before"] = len(existing)
 
             collected, statistics = collect_job_urls(
-                output_path=urls_path, delay=delay, headless=True,
+                output_path=urls_path, delay=delay, headless=headless,
             )
             if collected.empty:
                 raise ValueError("No URLs collected; refusing to report success.")
@@ -110,7 +110,7 @@ def run_collection(output_path=OUTPUT_PATH, urls_path=URLS_PATH,
                 results = scrape_jobs(
                     urls_path=urls_path, output_path=staging,
                     error_path=run_dir / "errors.csv", delay=delay,
-                    headless=True, max_consecutive_page_errors=5,
+                    headless=headless, max_consecutive_page_errors=5,
                 )
                 validate_records(results)
                 if not old_urls.issubset(set(results["url"])):
@@ -149,6 +149,8 @@ def run_collection(output_path=OUTPUT_PATH, urls_path=URLS_PATH,
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--delay", type=float, default=3.0)
+    parser.add_argument("--headed", action="store_true",
+                        help="Use visible Chrome for collection and job details.")
     parser.add_argument("--collection-only", action="store_true",
                         help="Collect raw CSV without cleaning or updating PostgreSQL.")
     args = parser.parse_args()
@@ -156,7 +158,8 @@ def main():
         parser.error("Use at least 3 seconds between requests.")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     try:
-        return run_collection(delay=args.delay, prepare=not args.collection_only)
+        return run_collection(delay=args.delay, prepare=not args.collection_only,
+                              headless=not args.headed)
     except RuntimeError as error:
         LOGGER.error("%s", error)
         return 3

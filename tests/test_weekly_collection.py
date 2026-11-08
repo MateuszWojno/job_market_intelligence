@@ -85,6 +85,16 @@ class WeeklyCollectionTests(unittest.TestCase):
             self.assertEqual(module.run_collection(*self.paths), 1)
         self.assertEqual(self.output.read_bytes(), original)
 
+    def test_visible_browser_used_for_listing_and_details(self):
+        with patch.object(module, "collect_job_urls", return_value=(
+            pd.DataFrame({"url": ["old", "new"]}), pd.DataFrame()
+        )) as collect, patch.object(module, "scrape_jobs", return_value=
+            pd.DataFrame([record("old"), record("new")])
+        ) as scrape:
+            self.assertEqual(module.run_collection(*self.paths, headless=False), 0)
+        self.assertFalse(collect.call_args.kwargs["headless"])
+        self.assertFalse(scrape.call_args.kwargs["headless"])
+
     def test_failed_atomic_replace_preserves_original(self):
         original = self.output.read_bytes()
         with patch.object(storage.os, "replace", side_effect=OSError("File locked")):

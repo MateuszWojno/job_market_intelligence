@@ -196,7 +196,8 @@ data/raw/nofluff_test_*.csv
 data/raw/*test*.csv
 
 # Temporary files
-*.tmp.idea/
+*.tmp
+/tmp/
 
 # Generated Plotly charts
 notebooks/iframe_figures/
